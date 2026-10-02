@@ -26,11 +26,12 @@ export function rowLines(row: Row, current: string | undefined, now: number): st
   const age = row.status === "unknown" ? `last seen ${elapsed(now - row.heartbeatAt)} ago` : elapsed(now - row.statusSince);
   return [
     `  ${safeText(row.name || row.sessionId.slice(0, 8))}${row.registrationId === current ? " [current]" : ""} · ${age}`,
-    `  ${safeText(row.cwd, 4096)} · ${activityLabel(row)}${row.waitingUnavailable ? " · Waiting detection unavailable (board UI)" : ""}`,
+    `  ${row.waitingUnavailable ? "Waiting detection unavailable (board UI) · " : ""}${activityLabel(row)} · ${safeText(row.cwd, 4096)}`,
   ];
 }
 
 export class Board {
+  focused = false;
   private rows: Row[] = [];
   private error = false;
   private offset = 0;
@@ -45,10 +46,11 @@ export class Board {
   private requestRender: () => void;
   private height: () => number;
   private done: () => void;
+  private visible: () => boolean;
 
   constructor(
     root: string, current: string | undefined, theme: Pick<Theme, "fg">,
-    requestRender: () => void, height: () => number, done: () => void,
+    requestRender: () => void, height: () => number, done: () => void, visible = () => true,
   ) {
     this.root = root;
     this.current = current;
@@ -56,6 +58,7 @@ export class Board {
     this.requestRender = requestRender;
     this.height = height;
     this.done = done;
+    this.visible = visible;
     this.timer = setInterval(() => void this.refresh(), 1000);
     void this.refresh();
   }
@@ -79,6 +82,7 @@ export class Board {
   }
 
   render(width: number): string[] {
+    if (!this.visible()) return [];
     const content: string[] = [];
     for (const status of ["needs-input", "failed", "working", "idle", "unknown"] as const) {
       const rows = this.rows.filter(row => row.status === status);

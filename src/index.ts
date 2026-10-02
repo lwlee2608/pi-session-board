@@ -70,9 +70,12 @@ export default function (pi: ExtensionAPI): void {
       boardOpen = true;
       try {
         startingBoard = true;
-        const interaction = ctx.ui.custom<void>((tui, theme, _keys, done) =>
-          new Board(root, registration?.id, theme, () => tui.requestRender(), () => tui.terminal.rows, () => done()),
-        { overlay: true, overlayOptions: { width: "90%", maxHeight: "90%" } });
+        const interaction = ctx.ui.custom<void>((tui, theme, _keys, done) => {
+          const board: Board = new Board(root, registration?.id, theme,
+            () => tui.requestRender(), () => tui.terminal.rows, () => done(),
+            () => board.focused);
+          return board;
+        }, { overlay: true, overlayOptions: { width: "90%", maxHeight: "90%" } });
         await interaction;
       } finally { boardOpen = false; startingBoard = false; }
     },
