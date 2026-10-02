@@ -19,7 +19,7 @@
 - **Stale presence policy** — Heartbeat every 5 seconds; show Unknown after 20 seconds without a heartbeat, hide after 5 minutes. No OS process probes and no deleting another registration's file. A paused writer can reappear. Clean exit removes its own record. User confirmed.
 - **Opening command and shortcut** — `/sessions` only; no global shortcut in v1. User confirmed.
 - **Busy-host access** — Pi's command dispatch handles extension commands before streaming/compaction prompt queueing; the command must not call `waitForIdle()`. Real TUI verification must cover opening and closing while busy. `research`
-- **Waiting API limits** — Pi reports only the outermost wrapped UI interaction and supplies no originating tool or prompt ID. Native UI events do not cover arbitrary external-terminal input or assistant prose. Do not promise universal waiting detection. `research`
+- **Waiting API limits** — Pi reports only the outermost wrapped UI interaction and supplies no originating tool or prompt ID. A direct test of the Pi 1.0.0 wrapper proved that a question opened during the board emits no separate start/end event, even if the board closes first. User approved limited detection: exclude the whole board-originated interaction and explicitly mark waiting detection unavailable until its outer UI end event. Standalone questions remain detectable; overlapping questions must remain accessible but need not produce Needs input. Native events also do not cover external-terminal input or assistant prose.
 - **Supported platforms** — Linux first. Use portable Node APIs, but do not claim verified macOS or Windows support. User confirmed.
 - **Package identity and license** — `@lwlee2608/pi-session-board`, UI title `Session Board`, MIT license. Prepare a public npm package; publishing is not authorized. User confirmed.
 - **UI details and timing** — Two-line rows: session/project identity and elapsed status time, then project path and metadata-only activity. Group in this order: Needs input, Failed, Working, Idle, Unknown. Show counts and mark the current session. Refresh once per second while open; arrow/page-key scrolling and Esc to close. Preserve viewport position and stable ordering across heartbeats. User confirmed.
@@ -43,7 +43,7 @@
 - Verification uses temporary local registry roots, synthetic events, and disposable Pi sessions. No paid model calls, production credentials, changes to the user's global Pi installation, or disruption of existing sessions. Any crash test targets only a process created for that test.
 
 ## Progress
-Phase 2 of 3 · 4/12 tasks — Phase 1 verified and reviewed in PR #1 (two rounds; scrolling-height fix, then clean).
+Phase 2 of 3 · 8/12 tasks — Phase 1 merged in PR #1; Phase 2 built and verified, review pending.
 
 ### Phase 1 — See live sessions across projects
 Open `/sessions` in either of two independently launched Pi terminals and see both sessions update without reopening the board.
@@ -58,12 +58,12 @@ Open `/sessions` in either of two independently launched Pi terminals and see bo
 ### Phase 2 — Know which sessions need attention
 Distinguish work, a question, and a failed run; safely consult the board while the host is busy.
 
-- [ ] Model attention states, final outcomes, concurrent tools, and elapsed status time (`src/state.ts`, `test/state.test.ts`).
-- [ ] Connect native UI, tool, settlement, and compaction events without persisting content (`src/index.ts`, `test/lifecycle.test.ts`).
-- [ ] Render final groups/activity labels and preserve usable focus when host questions arrive (`src/board.ts`, `test/board.test.ts`).
-- [ ] Add a test-only offline event/provider fixture and exact local attention-state verification steps (`test/fixtures/offline.ts`, `README.md`).
+- [x] Model attention states, final outcomes, concurrent tools, and elapsed status time (`src/state.ts`, `test/state.test.ts`).
+- [x] Connect native UI, tool, settlement, and compaction events without persisting content (`src/index.ts`, `test/lifecycle.test.ts`).
+- [x] Render final groups/activity labels and preserve usable focus when host questions arrive (`src/board.ts`, `test/board.test.ts`).
+- [x] Add a test-only offline event/provider fixture and exact local attention-state verification steps (`test/fixtures/offline.ts`, `README.md`).
 
-**Verify:** Run `npm run check` and `npm test`. State and adapter tests must exercise Working → Needs input → Working → Idle, final run failure, recovered tool failure, retry/compaction, user abort, concurrent/nested tools, and the next run clearing the previous outcome. Assert that prompt text, UI titles, arguments, outputs, and provider error details never reach registry records. In two disposable real Pi terminals, load the test-only fixture alongside the board. The fixture uses only a local deterministic provider and test tools, with no network, credentials, or charges; it drives a delayed tool, native blocking question, success, and non-retryable error. Observe the corresponding states in A. In B, open and close the board during delayed work: work continues and B does not become Needs input solely because its board opened. Also deliver a native question while B's board is open: it must remain accessible and answering must allow work to continue. Record the exact fixture commands in the README when adding it; never substitute a live provider call.
+**Verify:** Run `npm run check` and `npm test`. State and adapter tests must exercise Working → Needs input → Working → Idle, final run failure, recovered tool failure, retry/compaction, user abort, concurrent/nested tools, and the next run clearing the previous outcome. Assert that prompt text, UI titles, arguments, outputs, and provider error details never reach registry records. In two disposable real Pi terminals, load the test-only fixture alongside the board. The fixture uses only a local deterministic provider and test tools, with no network, credentials, or charges; it drives a delayed tool, native blocking question, success, and non-retryable error. Observe the corresponding states in A. In B, open and close the board during delayed work: work continues and B does not become Needs input solely because its board opened. Also deliver a native question while B's board is open: it must remain accessible and answering must allow work to continue. During this board-originated interaction show that waiting detection is unavailable, rather than claiming to detect the overlapping question. Record the exact fixture commands in the README when adding it; never substitute a live provider call.
 
 ### Phase 3 — Trust the board through interruptions
 Keep a truthful, usable board through lost heartbeats, session changes, bad registry files, and installation from the actual package artifact.
@@ -79,6 +79,7 @@ Keep a truthful, usable board through lost heartbeats, session changes, bad regi
 
 - User waived the green-CI requirement for Phases 1 and 2 because CI is explicitly Phase 3 scope. Local proof and review gates still apply; Phase 3 must have green CI.
 - Phase 1: `npm run check` and `npm test` passed (6 tests after the review fix). Two real Pi 1.0.0 terminals under an isolated tmux server, clean HOME/environment and temporary agent directory proved discovery, current marker, rename within two seconds, owned exit cleanup, Esc close and usable editor. No provider credentials or model calls.
+- Phase 2: type-check and 9 tests passed, plus two real isolated Pi terminals with the offline provider/tool fixture. Verified standalone waiting, success, final failure, next-run clearing, board open/close while busy, usable overlapping confirmation with limitation label, abort-to-Idle, and no private markers in records. Pi reports completed for abort during a tool; only explicitly aborted outcomes get the Aborted activity label.
 - Dependency note: `npm audit` reports a High advisory on Pi 1.0.0's development-only `brace-expansion@5.0.9`. `npm audit fix` and `npm update brace-expansion` did not resolve it. No copy ships in this package; host dependency updates are outside this phase.
 
 ## Demo

@@ -2,7 +2,7 @@ import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil
 import { join } from "node:path";
 import { Board } from "./board.ts";
 import { HEARTBEAT_MS, Registration, type Metadata } from "./registry.ts";
-import { transition } from "./state.ts";
+import { SessionState } from "./state.ts";
 
 export default function (pi: ExtensionAPI): void {
   const root = join(getAgentDir(), "pi-session-board");
@@ -11,6 +11,8 @@ export default function (pi: ExtensionAPI): void {
   let timer: ReturnType<typeof setInterval> | undefined;
   let warned = false;
   let boardOpen = false;
+  let startingBoard = false;
+  let state = new SessionState();
 
   function warn(ctx: ExtensionContext): void {
     if (!warned) ctx.ui.notify("Session Board cannot update its registry; retrying.", "warning");
@@ -18,7 +20,7 @@ export default function (pi: ExtensionAPI): void {
   }
   async function publish(ctx: ExtensionContext): Promise<void> {
     if (!registration || !metadata) return;
-    try { await registration.publish(metadata); warned = false; }
+    try { await registration.publish({ ...metadata, ...state.snapshot() }); warned = false; }
     catch { warn(ctx); }
   }
   async function stop(ctx: ExtensionContext): Promise<void> {
@@ -34,6 +36,8 @@ export default function (pi: ExtensionAPI): void {
     await stop(ctx);
     if (ctx.mode !== "tui") return;
     registration = new Registration(root);
+    state = new SessionState();
+    if (!ctx.isIdle()) state.start();
     metadata = {
       sessionId: ctx.sessionManager.getSessionId(), name: ctx.sessionManager.getSessionName() ?? "",
       cwd: ctx.cwd, status: ctx.isIdle() ? "idle" : "working", statusSince: Date.now(),
@@ -45,22 +49,32 @@ export default function (pi: ExtensionAPI): void {
   pi.on("session_info_changed", async (event, ctx) => {
     if (metadata) { metadata.name = event.name ?? ""; await publish(ctx); }
   });
-  pi.on("agent_start", async (_event, ctx) => {
-    if (metadata) { metadata = { ...metadata, ...transition(metadata, "working", Date.now()) }; await publish(ctx); }
+  pi.on("agent_start", async (_event, ctx) => { state.start(); await publish(ctx); });
+  pi.on("agent_before_settle", event => { state.beforeSettle(event.outcome); });
+  pi.on("agent_settled", async (_event, ctx) => { state.settle(); await publish(ctx); });
+  pi.on("tool_execution_start", async (event, ctx) => { state.toolStart(event.toolCallId, event.toolName); await publish(ctx); });
+  pi.on("tool_execution_end", async (event, ctx) => { state.toolEnd(event.toolCallId); await publish(ctx); });
+  pi.on("ui_prompt_start", async (event, ctx) => {
+    state.promptStart(startingBoard && event.kind === "custom");
+    startingBoard = false;
+    await publish(ctx);
   });
-  pi.on("agent_settled", async (_event, ctx) => {
-    if (metadata) { metadata = { ...metadata, ...transition(metadata, "idle", Date.now()) }; await publish(ctx); }
-  });
+  pi.on("ui_prompt_end", async (_event, ctx) => { state.promptEnd(); await publish(ctx); });
+  pi.on("session_before_compact", async (_event, ctx) => { state.compactStart(); await publish(ctx); });
+  pi.on("session_compact", async (_event, ctx) => { state.compactEnd("completed"); await publish(ctx); });
+  pi.on("session_compact_failed", async (event, ctx) => { state.compactEnd(event.aborted ? "aborted" : "error"); await publish(ctx); });
   pi.registerCommand("sessions", {
     description: "Observe running Pi terminal sessions",
     handler: async (_args, ctx) => {
       if (ctx.mode !== "tui" || boardOpen) return;
       boardOpen = true;
       try {
-        await ctx.ui.custom<void>((tui, theme, _keys, done) =>
+        startingBoard = true;
+        const interaction = ctx.ui.custom<void>((tui, theme, _keys, done) =>
           new Board(root, registration?.id, theme, () => tui.requestRender(), () => tui.terminal.rows, () => done()),
         { overlay: true, overlayOptions: { width: "90%", maxHeight: "90%" } });
-      } finally { boardOpen = false; }
+        await interaction;
+      } finally { boardOpen = false; startingBoard = false; }
     },
   });
 }

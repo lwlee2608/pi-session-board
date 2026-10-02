@@ -12,11 +12,21 @@ function elapsed(ms: number): string {
   return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`;
 }
 
+export function activityLabel(row: Row): string {
+  if (row.status === "unknown") return "No heartbeat";
+  if (row.status === "needs-input") return "Waiting for input";
+  if (row.status === "failed") return "Run failed";
+  if (row.activity === "compacting") return "Compacting";
+  if (row.activity === "aborted") return "Aborted";
+  if (row.tools?.length) return `Tool: ${row.tools.map(name => safeText(name, 128)).join(", ")}`;
+  return row.status === "working" ? "Generating" : "Ready";
+}
+
 export function rowLines(row: Row, current: string | undefined, now: number): string[] {
   const age = row.status === "unknown" ? `last seen ${elapsed(now - row.heartbeatAt)} ago` : elapsed(now - row.statusSince);
   return [
     `  ${safeText(row.name || row.sessionId.slice(0, 8))}${row.registrationId === current ? " [current]" : ""} · ${age}`,
-    `  ${safeText(row.cwd, 4096)} · ${row.status === "working" ? "Generating" : row.status === "idle" ? "Ready" : "No heartbeat"}`,
+    `  ${safeText(row.cwd, 4096)} · ${activityLabel(row)}${row.waitingUnavailable ? " · Waiting detection unavailable (board UI)" : ""}`,
   ];
 }
 
@@ -70,10 +80,10 @@ export class Board {
 
   render(width: number): string[] {
     const content: string[] = [];
-    for (const status of ["working", "idle", "unknown"] as const) {
+    for (const status of ["needs-input", "failed", "working", "idle", "unknown"] as const) {
       const rows = this.rows.filter(row => row.status === status);
       if (!rows.length) continue;
-      content.push(this.theme.fg("accent", `${status.toUpperCase()} (${rows.length})`));
+      content.push(this.theme.fg("accent", `${status.replace("-", " ").toUpperCase()} (${rows.length})`));
       for (const row of rows) content.push(...rowLines(row, this.current, Date.now()));
     }
     if (!content.length) content.push("No reporting sessions.");
