@@ -42,9 +42,13 @@ test("arrows select rows, rename stays targeted during editing and Esc cancels",
     assert.match(board.render(80).find(line => line.includes("\x1b[7m"))!, /Alpha/);
     board.handleInput("\x1b[B");
     assert.match(board.render(80).find(line => line.includes("\x1b[7m"))!, /Beta/);
-    board.handleInput("r"); board.handleInput("\x1b");
+    board.handleInput("r");
+    assert.match(board.render(80).join("\n"), /Name:.*Beta/);
+    board.handleInput("\x1b");
     assert.equal(renamed, "");
-    board.handleInput("r"); board.handleInput("\x15"); board.handleInput("Renamed"); board.handleInput("\r");
+    board.handleInput("\x1b[114u");
+    assert.match(board.render(80).join("\n"), /Name:.*Beta/);
+    board.handleInput("\x15"); board.handleInput("Renamed"); board.handleInput("\r");
     for (let i = 0; i < 100 && !renamed; i++) await new Promise(resolve => setTimeout(resolve, 10));
     assert.equal(renamed, "Renamed");
   } finally { board?.dispose(); await close(); await rm(root, { recursive: true, force: true }); }

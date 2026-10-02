@@ -147,7 +147,7 @@ export class Board {
       this.selected = rows[Math.max(0, Math.min(rows.length - 1, index + step))].registrationId;
       this.notice = "";
     }
-    if (data === "r" && selected) {
+    if (matchesKey(data, "r") && selected) {
       if (selected.status === "unknown") this.notice = "Cannot rename a session without a recent heartbeat";
       else {
         const input = new Input({ prompt: "Name: " });
