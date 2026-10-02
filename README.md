@@ -152,21 +152,17 @@ and creates a GitHub release with generated notes. Versions are bumped manually.
 ### One-time setup
 
 CI uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
-(OIDC), not an npm token or repository secret. In the npm package's
-**Settings → Trusted Publisher**, configure GitHub Actions with:
+(OIDC), not an npm token or repository secret. Keep your account's 2FA enabled:
+OIDC authorizes the GitHub workflow without an interactive 2FA prompt.
 
-- Owner: `lwlee2608`
-- Repository: `pi-session-board`
-- Workflow filename: `npm-publish.yml`
-- Environment: leave empty (the workflow does not use a GitHub environment)
-- Enable **Allow `npm publish`** if offered.
+#### 1. Publish the first version locally
 
-Publishing uses Node 24 for a recent npm version with trusted-publishing support;
-checks use Node 22. npm adds provenance for trusted publication.
+Skip this step if the package already exists on npm. npm currently requires an
+existing package before you can configure its trusted publisher; first-publication
+support for OIDC is tracked in [npm/cli#8544](https://github.com/npm/cli/issues/8544).
 
-If the package does not exist on npm yet, first publish it manually from a clean,
-verified checkout using an authorized npm account. This creates the package so
-its trusted publisher can be configured:
+From a clean, verified checkout, use an authorized npm account and complete the
+login and any 2FA prompts locally, not in CI:
 
 ```sh
 npm ci --ignore-scripts
@@ -177,8 +173,23 @@ npm login
 npm publish --access public --ignore-scripts
 ```
 
-This bootstrap is a real public release, not part of local workflow validation.
-Configure the trusted publisher before tagging subsequent releases.
+This is a real public release, not part of local workflow validation. No npm
+access token or GitHub secret is needed for this setup.
+
+#### 2. Authorize GitHub Actions on npmjs.com
+
+In the package's **Settings → Trusted Publisher**, configure GitHub Actions with:
+
+- Owner: `lwlee2608`
+- Repository: `pi-session-board`
+- Workflow filename: `npm-publish.yml`
+- Environment: leave empty (the workflow does not use a GitHub environment)
+- Enable **Allow `npm publish`** for direct, automatic publication rather than
+  stage-only publication that requires maintainer approval.
+
+Publishing uses Node 24 for a recent npm version with trusted-publishing support;
+checks use Node 22. npm adds provenance for trusted publication. Complete this
+setup before tagging subsequent releases.
 
 ### Release a version
 
@@ -190,14 +201,16 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-If the bootstrap already published `0.1.0`, CI skips npm publication and still
-creates the GitHub release. For subsequent versions:
+After the local first publication of `0.1.0`, CI skips npm publication and still
+creates the GitHub release. For subsequent versions, choose a version and push
+its tag; CI handles npm publication and the GitHub release automatically:
 
 ```sh
 npm version patch  # or minor / major; commits both manifests and tags vX.Y.Z
 git push origin main --follow-tags
 ```
 
+A push to `main` alone runs checks; it does not release or bump the version.
 A tag/version mismatch fails publication. Retry a failed release by re-running
 the tag's workflow, or use **Actions → CI and npm publish → Run workflow** and
 select the tag. Already-published versions and existing GitHub releases are
