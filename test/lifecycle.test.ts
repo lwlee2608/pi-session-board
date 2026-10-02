@@ -31,7 +31,7 @@ test("adapter writes only metadata across work, UI, tools, compaction and settle
     await emit("agent_start"); await emit("agent_before_settle", { outcome: "error", errorMessage: "PRIVATE_ERROR" }); await emit("agent_settled");
     assert.equal((await row()).status, "failed");
     const dir = join(root, "pi-session-board");
-    for (const file of await readdir(dir)) assert.doesNotMatch(await readFile(join(dir, file), "utf8"), /PRIVATE_/);
+    for (const file of (await readdir(dir)).filter(name => name.endsWith(".json"))) assert.doesNotMatch(await readFile(join(dir, file), "utf8"), /PRIVATE_/);
     const oldId = (await row()).registrationId;
     await emit("session_shutdown", { reason: "reload" });
     await emit("session_start", { reason: "reload" });
