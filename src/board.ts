@@ -3,6 +3,10 @@ import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { readRows, type Row } from "./registry.ts";
 import { safeText } from "./state.ts";
 
+export function boardHeight(terminalRows: number): number {
+  return Math.max(5, Math.floor(terminalRows * 0.9));
+}
+
 function elapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`;
@@ -73,7 +77,7 @@ export class Board {
       for (const row of rows) content.push(...rowLines(row, this.current, Date.now()));
     }
     if (!content.length) content.push("No reporting sessions.");
-    this.capacity = Math.max(1, this.height() - 6);
+    this.capacity = Math.max(1, boardHeight(this.height()) - 4);
     this.offset = Math.max(0, Math.min(this.offset, Math.max(0, content.length - this.capacity)));
     const lines = [
       this.theme.fg("accent", `Session Board · ${this.rows.length} sessions`),
