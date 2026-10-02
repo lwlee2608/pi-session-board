@@ -2,6 +2,7 @@ import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil
 import { join } from "node:path";
 import { Board } from "./board.ts";
 import { HEARTBEAT_MS, Registration, type Metadata } from "./registry.ts";
+import { serveRenames } from "./rename.ts";
 import { SessionState } from "./state.ts";
 
 export default function (pi: ExtensionAPI): void {
@@ -15,6 +16,7 @@ export default function (pi: ExtensionAPI): void {
   let state = new SessionState();
   let generation = 0;
   let closeBoard: (() => void) | undefined;
+  let closeRenames: (() => Promise<void>) | undefined;
 
   function warn(ctx: ExtensionContext): void {
     if (!warned) ctx.ui.notify("Session Board cannot update its registry; retrying.", "warning");
@@ -34,6 +36,9 @@ export default function (pi: ExtensionAPI): void {
     const old = registration;
     registration = undefined;
     metadata = undefined;
+    const close = closeRenames;
+    closeRenames = undefined;
+    try { await close?.(); } catch { warn(ctx); }
     try { await old?.close(); } catch { warn(ctx); }
   }
 
@@ -49,6 +54,17 @@ export default function (pi: ExtensionAPI): void {
       sessionId: ctx.sessionManager.getSessionId(), name: ctx.sessionManager.getSessionName() ?? "",
       cwd: ctx.cwd, status: ctx.isIdle() ? "idle" : "working", statusSince: Date.now(),
     };
+    const owner = registration;
+    const sessionId = metadata.sessionId;
+    try {
+      const close = await serveRenames(root, owner.id, sessionId, name => {
+        if (registration !== owner || generation !== currentGeneration || ctx.sessionManager.getSessionId() !== sessionId) throw new Error("Session changed");
+        pi.setSessionName(name);
+      });
+      if (generation !== currentGeneration) { await close(); return; }
+      closeRenames = close;
+    } catch { ctx.ui.notify("Session Board remote rename unavailable; monitoring still works.", "warning"); }
+    if (generation !== currentGeneration) return;
     await publish(ctx);
     if (generation === currentGeneration) timer = setInterval(() => void publish(ctx), HEARTBEAT_MS);
   });

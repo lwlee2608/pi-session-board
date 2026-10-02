@@ -1,6 +1,6 @@
 # Session Board
 
-A read-only full-area Pi board for independent interactive sessions across projects.
+A full-area Pi session board for independent interactive sessions across projects.
 Run `/sessions` in any participating terminal. Each terminal must load the extension
 and use the same Pi agent directory. No central launcher or server is needed.
 
@@ -27,10 +27,29 @@ short project names, activity, and elapsed time in aligned single-line rows.
 Status counts sit above the grouped list. `›` marks the current terminal; unnamed
 sessions use the last eight characters of their registration ID. Use `/name` in
 each terminal for a recognizable task name. The board covers the conversation
-while open and restores it on exit. The board refreshes each second; use arrows or
-Page Up/Down to scroll and Esc to close. Closing it does not interrupt the agent.
+while open and restores it on exit. The board refreshes each second; use ↑/↓ to select a highlighted row,
+Page Up/Down to move by a page, `r` to rename, and Esc to close. Closing it does not interrupt the agent.
 Groups are Needs input, Failed, Working, Idle, and Unknown. A recovered tool error
 is not a failed run. Idle means the run stopped, not that your task is complete.
+
+## Select and rename
+
+Use ↑/↓ to highlight a session, then press `r`. Edit the name in the bottom input;
+Enter saves and Esc cancels without closing the board. Names must contain 1–128
+characters (no control characters). Use Pi's `/name` command to clear a name.
+
+This changes the **actual Pi session name**, not a board alias. Each participating
+terminal must load this version of the extension; run `/reload` in both terminals
+after updating. The owning extension applies the rename through Pi's API, so normal
+session persistence applies. No other process writes its history file.
+
+Rename requests use private local Unix sockets beside the presence records, with
+short timeouts and per-registration/session targeting. Unknown sessions cannot be
+renamed. A quit, reload, or session switch invalidates the old endpoint; retry after
+refreshing. A timeout has an uncertain outcome: check the name before retrying.
+Other processes running as your user can access these endpoints, as they can access
+Pi's own files. No network listener is opened. On unusually long agent-directory
+paths, Unix socket limits disable renaming while monitoring continues.
 
 ## Local two-terminal verification
 
@@ -111,7 +130,7 @@ JSON. It deliberately does not implement a general-purpose model service.
 - Names and paths are visible local metadata; avoid putting secrets in names.
   Tool arguments, UI titles, provider errors, and message contents are never stored.
 - The board temporarily yields the screen when a native question takes focus.
-  There is no session control, terminal switching, cross-machine discovery, or
+  Apart from explicit renaming, there is no session control, terminal switching, cross-machine discovery, or
   promise of task completion. Very short terminals show an enlarge-terminal hint.
 - Only Linux with Pi 1.0.0 is verified. Other operating systems, older hosts, and
   future Pi releases are not covered by this release's compatibility claim.

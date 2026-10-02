@@ -53,7 +53,7 @@ test("full-area surface fills every cell and scrolling reaches the last row", as
   } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 
-test("refresh preserves the scrolled session when earlier rows change groups", async () => {
+test("refresh preserves selected session when earlier rows change groups", async () => {
   const root = await mkdtemp(join(tmpdir(), "board-anchor-"));
   let board: Board | undefined;
   try {
@@ -69,11 +69,11 @@ test("refresh preserves the scrolled session when earlier rows change groups", a
     await ready;
     board.render(80);
     for (let i = 0; i < 8; i++) board.handleInput("\x1b[B");
-    const before = board.render(80)[3];
+    const before = board.render(80).find(line => line.includes("\x1b[7m"))!;
     await writers[0].publish({ sessionId: "0", name: "session-0", cwd: "/p0", status: "working", statusSince: Date.now() });
     ready = new Promise<void>(resolve => { refreshed = resolve; });
     await ready;
-    assert.equal(board.render(80)[3].slice(0, 40), before.slice(0, 40));
+    assert.equal(board.render(80).find(line => line.includes("\x1b[7m"))!.slice(0, 40), before.slice(0, 40));
   } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 

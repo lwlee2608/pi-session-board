@@ -1,7 +1,8 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { basename } from "node:path";
-import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { Input, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { readRows, type Row } from "./registry.ts";
+import { renameSession, normalizeName } from "./rename.ts";
 import { safeText } from "./state.ts";
 
 const groups = [
@@ -59,9 +60,10 @@ export class Board {
   private error = false;
   private offset = 0;
   private capacity = 1;
-  private anchor: string | undefined;
-  private anchorOffset = 0;
-  private userScrolled = false;
+  private selected: string | undefined;
+  private editing: { row: Row; input: Input } | undefined;
+  private saving = false;
+  private notice = "";
   private timer: ReturnType<typeof setInterval>;
   private disposed = false;
   private reading = false;
@@ -97,13 +99,65 @@ export class Board {
     if (!this.disposed) this.requestRender();
   }
 
+  private orderedRows(): Row[] {
+    return groups.flatMap(([status]) => this.rows.filter(row => row.status === status));
+  }
+
+  private selection(): Row | undefined {
+    const rows = this.orderedRows();
+    const selected = rows.find(row => row.registrationId === this.selected) ?? rows[0];
+    this.selected = selected?.registrationId;
+    return selected;
+  }
+
+  private async saveName(): Promise<void> {
+    const edit = this.editing;
+    if (!edit || this.saving) return;
+    try {
+      const name = normalizeName(edit.input.getValue());
+      const live = this.rows.find(row => row.registrationId === edit.row.registrationId);
+      if (!live || live.status === "unknown") throw new Error("Session is no longer live");
+      this.saving = true;
+      this.notice = "Saving…";
+      this.requestRender();
+      await renameSession(this.root, edit.row.registrationId, edit.row.sessionId, name);
+      if (this.disposed) return;
+      this.editing = undefined;
+      this.notice = "Session renamed";
+      await this.refresh();
+    } catch (error) { this.notice = error instanceof Error ? error.message : "Rename failed"; }
+    finally { this.saving = false; if (!this.disposed) this.requestRender(); }
+  }
+
   handleInput(data: string): void {
+    if (this.saving) return;
+    if (this.editing) {
+      if (matchesKey(data, "escape")) { this.editing = undefined; this.notice = ""; }
+      else this.editing.input.handleInput(data);
+      this.requestRender();
+      return;
+    }
     if (matchesKey(data, "escape")) { this.done(); return; }
-    if (matchesKey(data, "up")) this.offset--;
-    if (matchesKey(data, "down")) this.offset++;
-    if (matchesKey(data, "pageUp")) this.offset -= this.capacity;
-    if (matchesKey(data, "pageDown")) this.offset += this.capacity;
-    this.userScrolled = true;
+    const rows = this.orderedRows();
+    const selected = this.selection();
+    const index = rows.findIndex(row => row.registrationId === selected?.registrationId);
+    const step = matchesKey(data, "up") ? -1 : matchesKey(data, "down") ? 1
+      : matchesKey(data, "pageUp") ? -this.capacity : matchesKey(data, "pageDown") ? this.capacity : 0;
+    if (step && rows.length) {
+      this.selected = rows[Math.max(0, Math.min(rows.length - 1, index + step))].registrationId;
+      this.notice = "";
+    }
+    if (data === "r" && selected) {
+      if (selected.status === "unknown") this.notice = "Cannot rename a session without a recent heartbeat";
+      else {
+        const input = new Input({ prompt: "Name: " });
+        input.setValue(selected.name);
+        input.handleInput("\x05");
+        input.onSubmit = () => { void this.saveName(); };
+        this.editing = { row: { ...selected }, input };
+        this.notice = "Enter save · Esc cancel · 1–128 characters";
+      }
+    }
     this.requestRender();
   }
 
@@ -116,6 +170,7 @@ export class Board {
     const content: string[] = [];
     const keys: string[] = [];
     const counts: string[] = [];
+    this.selection();
     for (const [status, label, color] of groups) {
       const rows = this.rows.filter(row => row.status === status);
       if (!rows.length) continue;
@@ -124,33 +179,31 @@ export class Board {
       content.push(this.theme.fg("dim", label));
       keys.push(`group:${status}`);
       for (const row of rows) {
-        content.push(this.theme.fg(row.registrationId === this.current ? "text" : color,
-          rowLine(row, this.current, Date.now(), inner)));
+        const selected = row.registrationId === this.selected;
+        const line = this.theme.fg(selected ? "accent" : row.registrationId === this.current ? "text" : color,
+          rowLine(row, this.current, Date.now(), inner));
+        content.push(selected ? `\x1b[7m${line}\x1b[27m` : line);
         keys.push(row.registrationId);
       }
     }
     if (!content.length) content.push(this.error ? "Cannot read session registry; retrying…" : "No reporting sessions.");
     this.capacity = height - 6;
-    if (!this.userScrolled && this.anchor && this.offset > 0) {
-      const position = keys.indexOf(this.anchor);
-      if (position >= 0) this.offset = position - this.anchorOffset;
-    }
+    const position = keys.indexOf(this.selected ?? "");
+    if (position >= 0 && position < this.offset) this.offset = position;
+    if (position >= this.offset + this.capacity) this.offset = position - this.capacity + 1;
     this.offset = Math.max(0, Math.min(this.offset, Math.max(0, content.length - this.capacity)));
-    const anchorIndex = keys.findIndex((key, i) => i >= this.offset && !key.startsWith("group:"));
-    this.anchor = keys[anchorIndex];
-    this.anchorOffset = anchorIndex - this.offset;
-    this.userScrolled = false;
     const body = content.slice(this.offset, this.offset + this.capacity);
     while (body.length < this.capacity) body.push("");
     const limited = this.rows.some(row => row.waitingUnavailable);
     const range = content.length > this.capacity ? ` · ${this.offset + 1}–${Math.min(content.length, this.offset + this.capacity)}/${content.length}` : "";
+    if (this.editing) this.editing.input.focused = this.focused;
     const lines = [
       this.theme.fg("text", "Session Board"),
       this.theme.fg("dim", counts.join(" · ") || "0 sessions"),
       "", ...body,
       this.theme.fg("dim", "─".repeat(inner)),
-      this.theme.fg("dim", limited ? "? waiting detection unavailable · › current session" : "› current session · elapsed time in status"),
-      this.theme.fg("dim", `↑↓ / PgUp / PgDn scroll · Esc return${range}`),
+      this.editing ? this.editing.input.render(inner)[0] : this.theme.fg("dim", limited ? "? waiting detection unavailable · › current session" : "› current session · elapsed time in status"),
+      this.theme.fg("dim", this.notice || `↑↓ select · PgUp/PgDn page · r rename · Esc return${range}`),
     ];
     // Fill every cell so the host transcript cannot show through the surface.
     return lines.map(line => fit(` ${fit(line, inner)}`, width));
