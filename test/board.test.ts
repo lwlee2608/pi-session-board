@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Registration } from "../src/registry.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { Board, rowLines } from "../src/board.ts";
+import { Board, rowLine } from "../src/board.ts";
 import { transition } from "../src/state.ts";
 import type { Row } from "../src/registry.ts";
 
@@ -15,11 +15,21 @@ const row: Row = {
 };
 
 test("rows show current identity, project, activity and status age", () => {
-  assert.deepEqual(rowLines(row, "current", 121000), ["  Fix auth [current] · 2m", "  Generating · /api"]);
-  assert.match(rowLines({ ...row, status: "unknown" }, undefined, 22000)[0], /last seen 20s ago/);
+  const line = rowLine(row, "current", 121000, 80);
+  assert.match(line, /^›  api\s+\/ Fix auth/);
+  assert.match(line, /Generating\s+2m$/);
+  assert.equal(visibleWidth(line), 80);
+  assert.match(rowLine({ ...row, status: "unknown" }, undefined, 22000, 80), /seen 20s$/);
+  assert.notEqual(rowLine({ ...row, name: "", registrationId: "prefix-12345678" }, undefined, 1000, 80),
+    rowLine({ ...row, name: "", registrationId: "prefix-87654321" }, undefined, 1000, 80));
+  for (const width of [32, 80]) {
+    const long = { ...row, name: "", cwd: "/pi-session-board-integration-tests" };
+    assert.match(rowLine({ ...long, registrationId: "prefix-12345678" }, undefined, 1000, width), /12345678/);
+    assert.match(rowLine({ ...long, registrationId: "prefix-87654321" }, undefined, 1000, width), /87654321/);
+  }
 });
 
-test("scrolling reaches the last detail line within the overlay height", async () => {
+test("full-area surface fills every cell and scrolling reaches the last row", async () => {
   const root = await mkdtemp(join(tmpdir(), "board-scroll-"));
   let board: Board | undefined;
   try {
@@ -31,14 +41,15 @@ test("scrolling reaches the last detail line within the overlay height", async (
     }
     let refreshed!: () => void;
     const ready = new Promise<void>(resolve => { refreshed = resolve; });
-    board = new Board(root, undefined, { fg: (_color, text) => text }, refreshed, () => 50, () => {});
+    board = new Board(root, undefined, { fg: (_color, text) => text }, refreshed, () => 24, () => {});
     await ready;
     board.render(80);
     for (let i = 0; i < 100; i++) board.handleInput("\x1b[B");
     const lines = board.render(80);
-    assert.ok(lines.length <= 45);
-    assert.ok(lines.some(line => line.includes("/project-29")));
-    assert.match(lines.at(-1)!, /Esc close/);
+    assert.equal(lines.length, 24);
+    assert.ok(lines.every(line => visibleWidth(line) === 80));
+    assert.ok(lines.some(line => line.includes("project-29")));
+    assert.match(lines.at(-1)!, /Esc return/);
   } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 
@@ -58,11 +69,11 @@ test("refresh preserves the scrolled session when earlier rows change groups", a
     await ready;
     board.render(80);
     for (let i = 0; i < 8; i++) board.handleInput("\x1b[B");
-    const before = board.render(80)[2];
+    const before = board.render(80)[3];
     await writers[0].publish({ sessionId: "0", name: "session-0", cwd: "/p0", status: "working", statusSince: Date.now() });
     ready = new Promise<void>(resolve => { refreshed = resolve; });
     await ready;
-    assert.equal(board.render(80)[2], before);
+    assert.equal(board.render(80)[3].slice(0, 40), before.slice(0, 40));
   } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 
@@ -79,14 +90,14 @@ test("Unicode/control text fits narrow widths and themes are evaluated on each r
     for (const width of [1, 12, 40, 80]) {
       for (const line of board.render(width)) { assert.ok(visibleWidth(line) <= width); assert.ok(!line.includes("\x1b[2J")); }
     }
-    assert.match(board.render(80)[0], /^one:/);
-    style = "two"; board.invalidate(); assert.match(board.render(80)[0], /^two:/);
+    assert.match(board.render(80)[0], /^ one:/);
+    style = "two"; board.invalidate(); assert.match(board.render(80)[0], /^ two:/);
   } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 
-test("limitation indicator precedes long metadata and unfocused board yields the screen", () => {
-  const limited = rowLines({ ...row, cwd: "/very/long/checkout/".repeat(10), tools: ["bash", "read"], waitingUnavailable: true }, undefined, 1000);
-  assert.match(limited[1].slice(0, 72), /Waiting detection unavailable/);
+test("compact limitation marker precedes long metadata and unfocused board yields the screen", () => {
+  const limited = rowLine({ ...row, cwd: "/very/long/checkout/".repeat(10), tools: ["bash", "read"], waitingUnavailable: true }, undefined, 1000, 80);
+  assert.match(limited, /^·\?/);
   const board = new Board("/nonexistent-board-test", undefined, { fg: (_color, text) => text }, () => {}, () => 40, () => {}, () => false);
   try { assert.deepEqual(board.render(80), []); } finally { board.dispose(); }
 });
