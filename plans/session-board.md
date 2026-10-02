@@ -43,7 +43,7 @@
 - Verification uses temporary local registry roots, synthetic events, and disposable Pi sessions. No paid model calls, production credentials, changes to the user's global Pi installation, or disruption of existing sessions. Any crash test targets only a process created for that test.
 
 ## Progress
-Phase 3 of 3 · 12/12 tasks — Phases 1 and 2 merged; Phase 3 locally verified, review and CI pending.
+Complete · 12/12 tasks — three phase PRs (#1, #2, #3), each with two review rounds. Final integration-to-main PR remains for the user. Demo: none.
 
 ### Phase 1 — See live sessions across projects
 Open `/sessions` in either of two independently launched Pi terminals and see both sessions update without reopening the board.
@@ -80,7 +80,7 @@ Keep a truthful, usable board through lost heartbeats, session changes, bad regi
 - User waived the green-CI requirement for Phases 1 and 2 because CI is explicitly Phase 3 scope. Local proof and review gates still apply; Phase 3 must have green CI.
 - Phase 1: `npm run check` and `npm test` passed (6 tests after the review fix). Two real Pi 1.0.0 terminals under an isolated tmux server, clean HOME/environment and temporary agent directory proved discovery, current marker, rename within two seconds, owned exit cleanup, Esc close and usable editor. No provider credentials or model calls.
 - Phase 2: two review rounds; fixed tall-board question occlusion by yielding rendering when unfocused and prioritized the unavailable warning before long metadata. Round 2 clean. Type-check and 10 tests passed, plus two real isolated Pi terminals with the offline provider/tool fixture (including 25 filler rows for question visibility). Verified standalone waiting, success, final failure, next-run clearing, board open/close while busy, usable overlapping confirmation with limitation label, abort-to-Idle, and no private markers in records. Pi reports completed for abort during a tool; only explicitly aborted outcomes get the Aborted activity label.
-- Phase 3: type-check and 16 tests passed, including packed imports, lifecycle/write races, malformed records, I/O recovery, viewport anchor, Unicode and theme refresh. Loaded extracted npm artifact outside checkout in isolated real Pi terminals (regular/fullscreen); verified reload/new/resume/fork identity replacement, Unicode/resize, then SIGKILL only the disposable writer: Unknown after 20 seconds and hidden after 5 real minutes while its record remained. No model network calls; local fixture only.
+- Phase 3: two review rounds; fixed malformed registration-ID coercion with a regression case; round 2 clean, no skipped findings. Linux CI passed. Type-check and 16 tests passed, including packed imports, lifecycle/write races, malformed records, I/O recovery, viewport anchor, Unicode and theme refresh. Loaded extracted npm artifact outside checkout in isolated real Pi terminals (regular/fullscreen); verified reload/new/resume/fork identity replacement, Unicode/resize, then SIGKILL only the disposable writer: Unknown after 20 seconds and hidden after 5 real minutes while its record remained. No model network calls; local fixture only.
 - Dependency note: `npm audit` reports a High advisory on Pi 1.0.0's development-only `brace-expansion@5.0.9`. `npm audit fix` and `npm update brace-expansion` did not resolve it. No copy ships in this package; host dependency updates are outside this phase.
 
 ## Demo
