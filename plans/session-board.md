@@ -10,7 +10,7 @@
 - **UI surface** — On-demand native Pi overlay. User confirmed.
 - **Stored activity** — Project directory, session identity/name, status, tool names, and timings only. No prompt excerpts, tool arguments, tool output, or transcripts. User confirmed.
 - **Registration scope** — Interactive Pi TUI sessions only, with the extension loaded and sharing the same Pi agent directory. Exclude RPC, JSON, print, and automated child sessions. User confirmed.
-- **Starting point** — Repository contains only the unimplemented handoff in `IMPLEMENTATION.md`. Preserve that file as provenance; this plan supersedes its proposals once decisions are settled. `research`
+- **Starting point** — Repository starts with this plan and no implementation. The superseded handoff has been removed; this plan is authoritative.
 - **Pi APIs** — Installed Pi is `1.0.0`. It provides `session_start` reasons, `session_shutdown` reasons, `session_info_changed`, `agent_before_settle`, `agent_settled`, and `ui_prompt_start` / `ui_prompt_end`. Waiting detection need not use tool-name guesses. `research`
 - **Waiting detection caveat** — Native UI events wrap select/confirm/input/editor/custom interactions, not just agent questions. The board itself must not create a false Needs input state. `research`
 - **Package conventions** — Sibling `../pi-model-plus` uses ESM TypeScript, npm lockfile, `tsc --noEmit`, Node's test runner, source distribution, and wildcard host-package peers. Current upstream guidance likewise requires host-provided peers with `*`, not bundled runtime copies. `research`
@@ -82,11 +82,11 @@ none
 
 - No pre-1.0 compatibility, non-TUI monitoring, session control, terminal switching, browser server, or other-machine monitoring.
 - No automatic deletion of abandoned records from other registrations; stale records are hidden, not crash history.
-- npm publication, git pushes, releases, and global installation require separate user authorization. Gallery discovery is a post-publication check, not an MVP acceptance criterion or a naming guarantee.
+- User authorized bootstrapping remote `main`, pushing integration/phase branches, opening PRs, and merging reviewed phase PRs into integration under the build-feature workflow. Leave the final integration-to-main PR for the user to merge.
+- npm publication, releases, and global installation require separate user authorization. Gallery discovery is a post-publication check, not an MVP acceptance criterion or a naming guarantee.
 
 ## Research references
 
-- Original proposal: `IMPLEMENTATION.md` (preserved, not authoritative where this plan differs).
 - Installed Pi 1.0.0: `docs/extensions.md`, `docs/tui.md`, `docs/packages.md`, `docs/configuration.md`, `docs/keybindings.md`, and `docs/custom-provider.md` under the installed `@earendil-works/pi-coding-agent` package.
 - Exact lifecycle/UI contracts: installed `dist/core/extensions/types.d.ts`, `dist/core/extensions/runner.js`, and `dist/core/agent-session.js`. UI events describe only the outermost prompt; outcome is available before settlement, not on the payload-free `agent_settled` event.
 - Native overlay pattern: installed `examples/extensions/overlay-test.ts`.
