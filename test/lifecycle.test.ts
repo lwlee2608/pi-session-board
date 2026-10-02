@@ -32,6 +32,13 @@ test("adapter writes only metadata across work, UI, tools, compaction and settle
     assert.equal((await row()).status, "failed");
     const dir = join(root, "pi-session-board");
     for (const file of await readdir(dir)) assert.doesNotMatch(await readFile(join(dir, file), "utf8"), /PRIVATE_/);
+    const oldId = (await row()).registrationId;
+    await emit("session_shutdown", { reason: "reload" });
+    await emit("session_start", { reason: "reload" });
+    assert.notEqual((await row()).registrationId, oldId);
+    assert.equal((await readRows(dir)).length, 1);
+    await Promise.all([emit("session_start"), emit("session_shutdown")]);
+    assert.equal((await readRows(dir)).length, 0);
   } finally {
     await emit("session_shutdown");
     if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous;

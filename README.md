@@ -6,6 +6,13 @@ and use the same Pi agent directory. No central launcher or server is needed.
 
 Requires Node 22.19+; tested with Pi 1.0.0 on Linux. Older Pi releases are not supported.
 
+## Install from a checkout
+
+After reviewing the source, run `pi install /absolute/path/to/pi-session-board` and
+reload each participating terminal. This changes your personal Pi package settings;
+it is optional. No npm publication is required. Use the temporary `-e` approach
+below when you do not want to change your installation.
+
 ## Try the checkout
 
 ```sh
@@ -48,7 +55,10 @@ waiting-detection availability, and timestamps are stored.
 No prompts, arguments, outputs, or transcripts are copied. Heartbeats run every
 5 seconds. A missing heartbeat becomes Unknown at 20 seconds and is hidden at
 5 minutes; this is not proof that a process crashed. Clean exits remove their
-own records. The board never removes another writer's record.
+own records. The board never removes another writer's record. Hidden abandoned
+records and temporary files can accumulate after crashes. With **all participating
+Pi sessions stopped**, you can delete only `<agent-dir>/pi-session-board/`; it will
+be recreated. Do not delete your agent directory or session histories.
 
 ## Attention detection
 
@@ -84,6 +94,24 @@ package distribution. Open `/sessions` in A. In B:
 
 The fixture's private prompt/output/error markers must never appear in registry
 JSON. It deliberately does not implement a general-purpose model service.
+
+## Troubleshooting and limits
+
+- Missing terminal: load the extension there, then check that both terminals use
+  the same `PI_CODING_AGENT_DIR`. RPC, JSON, and print runs do not register.
+- Unknown: the heartbeat lease expired. The process may be paused or hung, not
+  necessarily dead. It reappears when it reports again. Machine sleep and clock
+  changes affect wall-clock freshness and elapsed times.
+- Registry warning: check free space and ownership/permissions of the agent
+  directory. Updates retry on the next heartbeat; read failures show a board error
+  instead of stale rows. Fix permissions rather than making records world-readable.
+- Names and paths are visible local metadata; avoid putting secrets in names.
+  Tool arguments, UI titles, provider errors, and message contents are never stored.
+- The board temporarily yields the screen when a native question takes focus.
+  There is no session control, terminal switching, cross-machine discovery, or
+  promise of task completion. Very short terminals show an enlarge-terminal hint.
+- Only Linux with Pi 1.0.0 is verified. Other operating systems, older hosts, and
+  future Pi releases are not covered by this release's compatibility claim.
 
 ## Development
 

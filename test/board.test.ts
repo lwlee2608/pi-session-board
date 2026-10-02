@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Registration } from "../src/registry.ts";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { Board, rowLines } from "../src/board.ts";
 import { transition } from "../src/state.ts";
 import type { Row } from "../src/registry.ts";
@@ -38,6 +39,48 @@ test("scrolling reaches the last detail line within the overlay height", async (
     assert.ok(lines.length <= 45);
     assert.ok(lines.some(line => line.includes("/project-29")));
     assert.match(lines.at(-1)!, /Esc close/);
+  } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("refresh preserves the scrolled session when earlier rows change groups", async () => {
+  const root = await mkdtemp(join(tmpdir(), "board-anchor-"));
+  let board: Board | undefined;
+  try {
+    const writers: Registration[] = [];
+    for (let i = 0; i < 15; i++) {
+      const writer = new Registration(root, () => Date.now() + i);
+      writers.push(writer);
+      await writer.publish({ sessionId: String(i), name: `session-${i}`, cwd: `/p${i}`, status: "idle", statusSince: Date.now() });
+    }
+    let refreshed!: () => void;
+    let ready = new Promise<void>(resolve => { refreshed = resolve; });
+    board = new Board(root, undefined, { fg: (_color, text) => text }, () => refreshed(), () => 15, () => {});
+    await ready;
+    board.render(80);
+    for (let i = 0; i < 8; i++) board.handleInput("\x1b[B");
+    const before = board.render(80)[2];
+    await writers[0].publish({ sessionId: "0", name: "session-0", cwd: "/p0", status: "working", statusSince: Date.now() });
+    ready = new Promise<void>(resolve => { refreshed = resolve; });
+    await ready;
+    assert.equal(board.render(80)[2], before);
+  } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("Unicode/control text fits narrow widths and themes are evaluated on each render", async () => {
+  const root = await mkdtemp(join(tmpdir(), "board-width-"));
+  let board: Board | undefined;
+  try {
+    await new Registration(root).publish({ sessionId: "id", name: "中文 👩‍💻\x1b[2J", cwd: "/unicode", status: "idle", statusSince: Date.now() });
+    let ready!: () => void;
+    const refreshed = new Promise<void>(resolve => { ready = resolve; });
+    let style = "one";
+    board = new Board(root, undefined, { fg: (_color, text) => `${style}:${text}` }, ready, () => 24, () => {});
+    await refreshed;
+    for (const width of [1, 12, 40, 80]) {
+      for (const line of board.render(width)) { assert.ok(visibleWidth(line) <= width); assert.ok(!line.includes("\x1b[2J")); }
+    }
+    assert.match(board.render(80)[0], /^one:/);
+    style = "two"; board.invalidate(); assert.match(board.render(80)[0], /^two:/);
   } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 

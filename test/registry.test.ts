@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -24,6 +24,50 @@ test("independent writers atomically replace private records and remove only the
     assert.deepEqual((await readRows(root, 1000)).map(r => r.registrationId), [b.id]);
     await b.close();
     assert.deepEqual(await readdir(root), []);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("shutdown racing queued writes cannot resurrect an old registration", async () => {
+  const root = await mkdtemp(join(tmpdir(), "board-race-"));
+  try {
+    const old = new Registration(root);
+    const writes = Array.from({ length: 50 }, () => old.publish(metadata));
+    const closing = old.close();
+    const current = new Registration(root);
+    await current.publish(metadata);
+    await Promise.all([...writes, closing]);
+    await old.publish(metadata);
+    assert.deepEqual((await readRows(root)).map(row => row.registrationId), [current.id]);
+    await current.close();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("malformed, unsupported, oversized, symlink and disappearing records do not break peers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "board-invalid-"));
+  try {
+    const good = new Registration(root); await good.publish(metadata);
+    let i = 0;
+    for (const text of ["{", JSON.stringify({ version: 2 }), JSON.stringify({ version: 1, registrationId: { toString: null } }), "x".repeat(40000), "null"]) {
+      await writeFile(join(root, `00000000-0000-0000-0000-${String(i++).padStart(12, "0")}.json`), text);
+    }
+    await symlink(join(root, `${good.id}.json`), join(root, "00000000-0000-0000-0000-000000000009.json"));
+    assert.deepEqual((await readRows(root)).map(row => row.registrationId), [good.id]);
+    await Promise.all([readRows(root), good.close()]);
+    assert.deepEqual(await readRows(root), []);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("writer recovers from an I/O failure on its next update", async () => {
+  const root = await mkdtemp(join(tmpdir(), "board-io-"));
+  const path = join(root, "registry");
+  try {
+    await writeFile(path, "blocked");
+    const writer = new Registration(path);
+    await assert.rejects(writer.publish(metadata));
+    await rm(path);
+    await writer.publish(metadata);
+    assert.equal((await readRows(path)).length, 1);
+    await writer.close();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -36,6 +36,9 @@ export class Board {
   private error = false;
   private offset = 0;
   private capacity = 1;
+  private anchor: string | undefined;
+  private anchorOffset = 0;
+  private userScrolled = false;
   private timer: ReturnType<typeof setInterval>;
   private disposed = false;
   private reading = false;
@@ -67,7 +70,7 @@ export class Board {
     if (this.disposed || this.reading) return;
     this.reading = true;
     try { this.rows = await readRows(this.root); this.error = false; }
-    catch { this.error = true; }
+    catch { this.error = true; this.rows = []; }
     finally { this.reading = false; }
     if (!this.disposed) this.requestRender();
   }
@@ -78,21 +81,37 @@ export class Board {
     if (matchesKey(data, "down")) this.offset++;
     if (matchesKey(data, "pageUp")) this.offset -= this.capacity;
     if (matchesKey(data, "pageDown")) this.offset += this.capacity;
+    this.userScrolled = true;
     this.requestRender();
   }
 
   render(width: number): string[] {
     if (!this.visible()) return [];
     const content: string[] = [];
+    const keys: string[] = [];
     for (const status of ["needs-input", "failed", "working", "idle", "unknown"] as const) {
       const rows = this.rows.filter(row => row.status === status);
       if (!rows.length) continue;
       content.push(this.theme.fg("accent", `${status.replace("-", " ").toUpperCase()} (${rows.length})`));
-      for (const row of rows) content.push(...rowLines(row, this.current, Date.now()));
+      keys.push(`group:${status}`);
+      for (const row of rows) {
+        content.push(...rowLines(row, this.current, Date.now()));
+        keys.push(`${row.registrationId}:name`, `${row.registrationId}:detail`);
+      }
     }
     if (!content.length) content.push("No reporting sessions.");
-    this.capacity = Math.max(1, boardHeight(this.height()) - 4);
+    const available = Math.max(1, Math.floor(this.height() * 0.9));
+    if (available < 5) return [truncateToWidth("Session Board: enlarge terminal · Esc close", Math.max(1, width))];
+    this.capacity = boardHeight(this.height()) - 4;
+    if (!this.userScrolled && this.anchor && this.offset > 0) {
+      const position = keys.indexOf(this.anchor);
+      if (position >= 0) this.offset = position - this.anchorOffset;
+    }
     this.offset = Math.max(0, Math.min(this.offset, Math.max(0, content.length - this.capacity)));
+    const anchorIndex = keys.findIndex((key, i) => i >= this.offset && !key.startsWith("group:"));
+    this.anchor = keys[anchorIndex];
+    this.anchorOffset = anchorIndex - this.offset;
+    this.userScrolled = false;
     const lines = [
       this.theme.fg("accent", `Session Board · ${this.rows.length} sessions`),
       this.error ? "Cannot read session registry; retrying…" : "",
