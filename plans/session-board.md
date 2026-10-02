@@ -43,7 +43,7 @@
 - Verification uses temporary local registry roots, synthetic events, and disposable Pi sessions. No paid model calls, production credentials, changes to the user's global Pi installation, or disruption of existing sessions. Any crash test targets only a process created for that test.
 
 ## Progress
-Phase 1 of 3 · 4/12 tasks — built and locally verified; PR review pending.
+Phase 2 of 3 · 4/12 tasks — Phase 1 verified and reviewed in PR #1 (two rounds; scrolling-height fix, then clean).
 
 ### Phase 1 — See live sessions across projects
 Open `/sessions` in either of two independently launched Pi terminals and see both sessions update without reopening the board.
@@ -77,7 +77,8 @@ Keep a truthful, usable board through lost heartbeats, session changes, bad regi
 
 ## Verification record
 
-- Phase 1: `npm run check` and `npm test` passed (5 tests). Two real Pi 1.0.0 terminals under an isolated tmux server, clean HOME/environment and temporary agent directory proved discovery, current marker, rename within two seconds, owned exit cleanup, Esc close and usable editor. No provider credentials or model calls.
+- User waived the green-CI requirement for Phases 1 and 2 because CI is explicitly Phase 3 scope. Local proof and review gates still apply; Phase 3 must have green CI.
+- Phase 1: `npm run check` and `npm test` passed (6 tests after the review fix). Two real Pi 1.0.0 terminals under an isolated tmux server, clean HOME/environment and temporary agent directory proved discovery, current marker, rename within two seconds, owned exit cleanup, Esc close and usable editor. No provider credentials or model calls.
 - Dependency note: `npm audit` reports a High advisory on Pi 1.0.0's development-only `brace-expansion@5.0.9`. `npm audit fix` and `npm update brace-expansion` did not resolve it. No copy ships in this package; host dependency updates are outside this phase.
 
 ## Demo
