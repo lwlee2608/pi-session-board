@@ -140,3 +140,69 @@ JSON. It deliberately does not implement a general-purpose model service.
 `npm run check` type-checks without building; `npm test` runs Node's test runner.
 Pi loads the TypeScript source directly. Host packages are peers, not bundled
 runtime dependencies. Tests use temporary registry directories.
+
+## Publishing
+
+`.github/workflows/npm-publish.yml` runs type checks, tests, and a package dry run
+on pull requests, pushes to `main` and `integrate/session-board`, and `v*` tags.
+Only version tags publish: after checks pass, the workflow verifies that the tag
+matches `package.json`, publishes `@lwlee2608/pi-session-board` publicly to npm,
+and creates a GitHub release with generated notes. Versions are bumped manually.
+
+### One-time setup
+
+CI uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
+(OIDC), not an npm token or repository secret. In the npm package's
+**Settings → Trusted Publisher**, configure GitHub Actions with:
+
+- Owner: `lwlee2608`
+- Repository: `pi-session-board`
+- Workflow filename: `npm-publish.yml`
+- Environment: leave empty (the workflow does not use a GitHub environment)
+- Enable **Allow `npm publish`** if offered.
+
+Publishing uses Node 24 for a recent npm version with trusted-publishing support;
+checks use Node 22. npm adds provenance for trusted publication.
+
+If the package does not exist on npm yet, first publish it manually from a clean,
+verified checkout using an authorized npm account. This creates the package so
+its trusted publisher can be configured:
+
+```sh
+npm ci --ignore-scripts
+npm run check
+npm test
+npm pack --dry-run --ignore-scripts
+npm login
+npm publish --access public --ignore-scripts
+```
+
+This bootstrap is a real public release, not part of local workflow validation.
+Configure the trusted publisher before tagging subsequent releases.
+
+### Release a version
+
+After the workflow is merged, tag the existing `0.1.0` version from a clean,
+up-to-date `main`:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+If the bootstrap already published `0.1.0`, CI skips npm publication and still
+creates the GitHub release. For subsequent versions:
+
+```sh
+npm version patch  # or minor / major; commits both manifests and tags vX.Y.Z
+git push origin main --follow-tags
+```
+
+A tag/version mismatch fails publication. Retry a failed release by re-running
+the tag's workflow, or use **Actions → CI and npm publish → Run workflow** and
+select the tag. Already-published versions and existing GitHub releases are
+skipped; registry errors other than a missing version fail the workflow. Manual
+runs on branches only run checks.
+
+There is no build step. The workflow publishes TypeScript source with
+`--ignore-scripts`; test fixtures and development dependencies are not shipped.
