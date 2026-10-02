@@ -47,7 +47,7 @@ test("malformed, unsupported, oversized, symlink and disappearing records do not
   try {
     const good = new Registration(root); await good.publish(metadata);
     let i = 0;
-    for (const text of ["{", JSON.stringify({ version: 2 }), "x".repeat(40000), "null"]) {
+    for (const text of ["{", JSON.stringify({ version: 2 }), JSON.stringify({ version: 1, registrationId: { toString: null } }), "x".repeat(40000), "null"]) {
       await writeFile(join(root, `00000000-0000-0000-0000-${String(i++).padStart(12, "0")}.json`), text);
     }
     await symlink(join(root, `${good.id}.json`), join(root, "00000000-0000-0000-0000-000000000009.json"));

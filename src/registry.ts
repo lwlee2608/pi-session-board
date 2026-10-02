@@ -33,7 +33,7 @@ export function visibleRecord(record: Presence, now: number): Row | undefined {
 function valid(value: unknown): value is Presence {
   if (!value || typeof value !== "object") return false;
   const r = value as Presence;
-  return r.version === 1 && /^[a-f0-9-]{36}$/.test(r.registrationId)
+  return r.version === 1 && typeof r.registrationId === "string" && /^[a-f0-9-]{36}$/.test(r.registrationId)
     && [r.sessionId, r.name, r.cwd].every(v => typeof v === "string" && v.length <= 4096)
     && [r.startedAt, r.heartbeatAt, r.statusSince].every(v => Number.isSafeInteger(v) && v >= 0)
     && ["idle", "working", "needs-input", "failed"].includes(r.status)
