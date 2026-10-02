@@ -43,15 +43,15 @@
 - Verification uses temporary local registry roots, synthetic events, and disposable Pi sessions. No paid model calls, production credentials, changes to the user's global Pi installation, or disruption of existing sessions. Any crash test targets only a process created for that test.
 
 ## Progress
-Phase 1 of 3 · 0/12 tasks
+Phase 1 of 3 · 4/12 tasks — built and locally verified; PR review pending.
 
 ### Phase 1 — See live sessions across projects
 Open `/sessions` in either of two independently launched Pi terminals and see both sessions update without reopening the board.
 
-- [ ] Create the loadable TypeScript package and local check/test commands (`package.json`, `package-lock.json`, `tsconfig.json`, `.gitignore`, `LICENSE`).
-- [ ] Publish isolated, bounded metadata records with heartbeat freshness and owned cleanup (`src/registry.ts`, `test/registry.test.ts`).
-- [ ] Register interactive sessions and connect identity, basic busy/idle transitions, and live overlay refresh (`src/index.ts`, `src/state.ts`, `src/board.ts`).
-- [ ] Verify the cross-project board and document local launch steps (`test/board.test.ts`, `README.md`).
+- [x] Create the loadable TypeScript package and local check/test commands (`package.json`, `package-lock.json`, `tsconfig.json`, `.gitignore`, `LICENSE`).
+- [x] Publish isolated, bounded metadata records with heartbeat freshness and owned cleanup (`src/registry.ts`, `test/registry.test.ts`).
+- [x] Register interactive sessions and connect identity, basic busy/idle transitions, and live overlay refresh (`src/index.ts`, `src/state.ts`, `src/board.ts`).
+- [x] Verify the cross-project board and document local launch steps (`test/board.test.ts`, `README.md`).
 
 **Verify:** Run `npm run check` and `npm test`; registry tests must cover two independent writers, private permissions, atomic replacement, owned cleanup, and the 20-second/5-minute freshness boundaries using an injected clock. Launch two disposable Pi TUI processes in different temporary project directories with the same temporary `PI_CODING_AGENT_DIR`, loading the absolute `src/index.ts` via `-e`. Without making a model call, open `/sessions` in A: both directories appear and A is marked current. Change B's session name using Pi's naming command and confirm A updates within two refresh ticks. Quit B normally and confirm its row disappears. Esc closes A's board without changing its editor or session. These checks are development-only, not a global installation.
 
@@ -74,6 +74,11 @@ Keep a truthful, usable board through lost heartbeats, session changes, bad regi
 - [ ] Complete installation, privacy, detection limits, registry cleanup, compatibility, and troubleshooting guidance (`README.md`).
 
 **Verify:** Run `npm run check` and `npm test`, including named cases for old-cleanup/new-registration isolation, shutdown racing a write, malformed/unsupported/oversized/disappearing records, I/O failure recovery, and frozen-clock stale-to-hidden transitions. Reuse the isolated two-terminal setup: `/reload`, `/new`, `/resume`, and fork in B must leave exactly one current B row after refresh, with no old identity. Terminate only a disposable B created for this test; A must show Unknown after 20 seconds and omit B after 5 minutes, without deleting B's record. Inspect retained metadata for the privacy contract. Test the overlay at narrow and normal widths, with Unicode names, scrolling during updates, and both regular/fullscreen Pi modes. Run `npm pack` to a temporary destination, extract the tarball, verify the manifest entry and every relative runtime import are included, and load that extracted package in a fresh isolated Pi TUI. `/sessions` must work without relying on the checkout or its `node_modules`; test fixtures must not ship in the package.
+
+## Verification record
+
+- Phase 1: `npm run check` and `npm test` passed (5 tests). Two real Pi 1.0.0 terminals under an isolated tmux server, clean HOME/environment and temporary agent directory proved discovery, current marker, rename within two seconds, owned exit cleanup, Esc close and usable editor. No provider credentials or model calls.
+- Dependency note: `npm audit` reports a High advisory on Pi 1.0.0's development-only `brace-expansion@5.0.9`. `npm audit fix` and `npm update brace-expansion` did not resolve it. No copy ships in this package; host dependency updates are outside this phase.
 
 ## Demo
 none
