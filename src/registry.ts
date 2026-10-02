@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { chmod, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { safeText, type Activity } from "./state.ts";
 
 export const HEARTBEAT_MS = 5_000;
 export const UNKNOWN_MS = 20_000;
 export const HIDE_MS = 300_000;
-const MAX_BYTES = 16_384;
+const MAX_BYTES = 32_768;
 
 export interface Metadata extends Activity {
   sessionId: string;
@@ -75,6 +75,8 @@ export class Registration {
   private startedAt: number;
   private closed = false;
   private pending = Promise.resolve();
+  private next: Presence | undefined;
+  private writing = false;
   private path: string;
 
   private root: string;
@@ -97,25 +99,34 @@ export class Registration {
       tools: metadata.tools?.slice(0, 8).map(name => safeText(name, 128)),
       activity: metadata.activity, waitingUnavailable: metadata.waitingUnavailable,
     };
-    const task = this.pending.then(async () => {
-      if (this.closed) return;
-      await mkdir(this.root, { recursive: true, mode: 0o700 });
-      await chmod(this.root, 0o700);
-      const temp = `${this.path}.${randomUUID()}.tmp`;
+    this.next = record;
+    if (this.writing) return this.pending;
+    this.writing = true;
+    this.pending = (async () => {
       try {
-        const file = await open(temp, "wx", 0o600);
-        try { await file.writeFile(JSON.stringify(record)); }
-        finally { await file.close(); }
-        await rename(temp, this.path);
-      } finally { await unlink(temp).catch(error => { if (error.code !== "ENOENT") throw error; }); }
-    });
-    this.pending = task.catch(() => {});
-    return task;
+        while (this.next && !this.closed) {
+          const latest = this.next;
+          this.next = undefined;
+          await mkdir(this.root, { recursive: true, mode: 0o700 });
+          if (!(await lstat(this.root)).isDirectory()) throw new Error("Invalid registry directory");
+          await chmod(this.root, 0o700);
+          const temp = `${this.path}.${randomUUID()}.tmp`;
+          try {
+            const file = await open(temp, "wx", 0o600);
+            try { await file.writeFile(JSON.stringify(latest)); }
+            finally { await file.close(); }
+            await rename(temp, this.path);
+          } finally { await unlink(temp).catch(error => { if (error.code !== "ENOENT") throw error; }); }
+        }
+      } finally { this.writing = false; }
+    })();
+    return this.pending;
   }
 
   async close(): Promise<void> {
     this.closed = true;
-    await this.pending;
+    this.next = undefined;
+    await this.pending.catch(() => {});
     await unlink(this.path).catch(error => { if (error.code !== "ENOENT") throw error; });
   }
 }

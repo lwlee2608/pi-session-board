@@ -13,6 +13,8 @@ export default function (pi: ExtensionAPI): void {
   let boardOpen = false;
   let startingBoard = false;
   let state = new SessionState();
+  let generation = 0;
+  let closeBoard: (() => void) | undefined;
 
   function warn(ctx: ExtensionContext): void {
     if (!warned) ctx.ui.notify("Session Board cannot update its registry; retrying.", "warning");
@@ -20,10 +22,13 @@ export default function (pi: ExtensionAPI): void {
   }
   async function publish(ctx: ExtensionContext): Promise<void> {
     if (!registration || !metadata) return;
-    try { await registration.publish({ ...metadata, ...state.snapshot() }); warned = false; }
-    catch { warn(ctx); }
+    const owner = registration;
+    try { await owner.publish({ ...metadata, ...state.snapshot() }); if (owner === registration) warned = false; }
+    catch { if (owner === registration) warn(ctx); }
   }
   async function stop(ctx: ExtensionContext): Promise<void> {
+    generation++;
+    closeBoard?.();
     clearInterval(timer);
     timer = undefined;
     const old = registration;
@@ -33,8 +38,10 @@ export default function (pi: ExtensionAPI): void {
   }
 
   pi.on("session_start", async (_event, ctx) => {
-    await stop(ctx);
-    if (ctx.mode !== "tui") return;
+    const stopping = stop(ctx);
+    const currentGeneration = generation;
+    await stopping;
+    if (ctx.mode !== "tui" || generation !== currentGeneration) return;
     registration = new Registration(root);
     state = new SessionState();
     if (!ctx.isIdle()) state.start();
@@ -43,7 +50,7 @@ export default function (pi: ExtensionAPI): void {
       cwd: ctx.cwd, status: ctx.isIdle() ? "idle" : "working", statusSince: Date.now(),
     };
     await publish(ctx);
-    timer = setInterval(() => void publish(ctx), HEARTBEAT_MS);
+    if (generation === currentGeneration) timer = setInterval(() => void publish(ctx), HEARTBEAT_MS);
   });
   pi.on("session_shutdown", async (_event, ctx) => { await stop(ctx); });
   pi.on("session_info_changed", async (event, ctx) => {
@@ -71,13 +78,14 @@ export default function (pi: ExtensionAPI): void {
       try {
         startingBoard = true;
         const interaction = ctx.ui.custom<void>((tui, theme, _keys, done) => {
+          closeBoard = () => done();
           const board: Board = new Board(root, registration?.id, theme,
             () => tui.requestRender(), () => tui.terminal.rows, () => done(),
             () => board.focused);
           return board;
         }, { overlay: true, overlayOptions: { width: "90%", maxHeight: "90%" } });
         await interaction;
-      } finally { boardOpen = false; startingBoard = false; }
+      } finally { boardOpen = false; startingBoard = false; closeBoard = undefined; }
     },
   });
 }
