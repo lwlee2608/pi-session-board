@@ -16,12 +16,17 @@ const row: Row = {
 
 test("rows show current identity, project, activity and status age", () => {
   const line = rowLine(row, "current", 121000, 80);
-  assert.match(line, /^›  api \/ Fix auth/);
+  assert.match(line, /^›  api\s+\/ Fix auth/);
   assert.match(line, /Generating\s+2m$/);
   assert.equal(visibleWidth(line), 80);
   assert.match(rowLine({ ...row, status: "unknown" }, undefined, 22000, 80), /seen 20s$/);
   assert.notEqual(rowLine({ ...row, name: "", registrationId: "prefix-12345678" }, undefined, 1000, 80),
     rowLine({ ...row, name: "", registrationId: "prefix-87654321" }, undefined, 1000, 80));
+  for (const width of [32, 80]) {
+    const long = { ...row, name: "", cwd: "/pi-session-board-integration-tests" };
+    assert.match(rowLine({ ...long, registrationId: "prefix-12345678" }, undefined, 1000, width), /12345678/);
+    assert.match(rowLine({ ...long, registrationId: "prefix-87654321" }, undefined, 1000, width), /87654321/);
+  }
 });
 
 test("full-area surface fills every cell and scrolling reaches the last row", async () => {

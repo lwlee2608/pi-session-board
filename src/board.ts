@@ -37,15 +37,20 @@ export function activityLabel(row: Row): string {
 export function rowLine(row: Row, current: string | undefined, now: number, width: number): string {
   const project = basename(safeText(row.cwd, 4096)) || "/";
   const name = safeText(row.name) || row.registrationId.slice(-8);
-  const identity = `${project} / ${name}`;
+  const identity = (space: number): string => {
+    if (space < 12) return fit(name, space);
+    const nameSpace = Math.min(visibleWidth(name), Math.max(8, Math.floor(space * 0.6)));
+    const projectSpace = Math.min(visibleWidth(project), Math.max(1, space - nameSpace - 3));
+    return `${fit(project, projectSpace)} / ${fit(name, space - projectSpace - 3)}`;
+  };
   const marker = row.registrationId === current ? "›" : groups.find(g => g[0] === row.status)![3];
   const badge = row.waitingUnavailable ? "?" : " ";
   const age = `${row.status === "unknown" ? "seen " : ""}${elapsed(now - (row.status === "unknown" ? row.heartbeatAt : row.statusSince))}`;
-  if (width < 36) return fit(`${marker}${badge} ${identity}`, width);
+  if (width < 36) return fit(`${marker}${badge} ${identity(Math.max(0, width - 3))}`, width);
   const ageWidth = Math.max(5, age.length);
   const nameWidth = Math.min(40, Math.floor((width - 3) * 0.4));
   const activityWidth = Math.max(0, width - nameWidth - ageWidth - 7);
-  return `${marker}${badge} ${fit(identity, nameWidth)}  ${fit(activityLabel(row), activityWidth)}  ${age.padStart(ageWidth)}`;
+  return `${marker}${badge} ${identity(nameWidth)}  ${fit(activityLabel(row), activityWidth)}  ${age.padStart(ageWidth)}`;
 }
 
 export class Board {
