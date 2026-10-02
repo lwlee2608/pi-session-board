@@ -1,15 +1,27 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import { basename } from "node:path";
+import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { readRows, type Row } from "./registry.ts";
 import { safeText } from "./state.ts";
 
-export function boardHeight(terminalRows: number): number {
-  return Math.max(5, Math.floor(terminalRows * 0.9));
-}
+const groups = [
+  ["needs-input", "Needs input", "warning", "✱"],
+  ["failed", "Failed", "error", "!"],
+  ["working", "Working", "accent", "·"],
+  ["idle", "Idle", "dim", "·"],
+  ["unknown", "Unknown", "warning", "?"],
+] as const;
 
 function elapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
-  return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`;
+  return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m`
+    : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86400)}d`;
+}
+
+function fit(text: string, width: number): string {
+  if (width <= 0) return "";
+  const clipped = truncateToWidth(text, width);
+  return clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
 }
 
 export function activityLabel(row: Row): string {
@@ -22,12 +34,18 @@ export function activityLabel(row: Row): string {
   return row.status === "working" ? "Generating" : "Ready";
 }
 
-export function rowLines(row: Row, current: string | undefined, now: number): string[] {
-  const age = row.status === "unknown" ? `last seen ${elapsed(now - row.heartbeatAt)} ago` : elapsed(now - row.statusSince);
-  return [
-    `  ${safeText(row.name || row.sessionId.slice(0, 8))}${row.registrationId === current ? " [current]" : ""} · ${age}`,
-    `  ${row.waitingUnavailable ? "Waiting detection unavailable (board UI) · " : ""}${activityLabel(row)} · ${safeText(row.cwd, 4096)}`,
-  ];
+export function rowLine(row: Row, current: string | undefined, now: number, width: number): string {
+  const project = basename(safeText(row.cwd, 4096)) || "/";
+  const name = safeText(row.name) || row.registrationId.slice(-8);
+  const identity = `${project} / ${name}`;
+  const marker = row.registrationId === current ? "›" : groups.find(g => g[0] === row.status)![3];
+  const badge = row.waitingUnavailable ? "?" : " ";
+  const age = `${row.status === "unknown" ? "seen " : ""}${elapsed(now - (row.status === "unknown" ? row.heartbeatAt : row.statusSince))}`;
+  if (width < 36) return fit(`${marker}${badge} ${identity}`, width);
+  const ageWidth = Math.max(5, age.length);
+  const nameWidth = Math.min(40, Math.floor((width - 3) * 0.4));
+  const activityWidth = Math.max(0, width - nameWidth - ageWidth - 7);
+  return `${marker}${badge} ${fit(identity, nameWidth)}  ${fit(activityLabel(row), activityWidth)}  ${age.padStart(ageWidth)}`;
 }
 
 export class Board {
@@ -42,7 +60,6 @@ export class Board {
   private timer: ReturnType<typeof setInterval>;
   private disposed = false;
   private reading = false;
-
   private root: string;
   private current: string | undefined;
   private theme: Pick<Theme, "fg">;
@@ -87,22 +104,28 @@ export class Board {
 
   render(width: number): string[] {
     if (!this.visible()) return [];
+    width = Math.max(1, width);
+    const height = Math.max(1, this.height());
+    if (height < 7) return Array.from({ length: height }, (_, i) => fit(i === 0 ? "Session Board · Esc return" : "", width));
+    const inner = Math.max(1, width - 2);
     const content: string[] = [];
     const keys: string[] = [];
-    for (const status of ["needs-input", "failed", "working", "idle", "unknown"] as const) {
+    const counts: string[] = [];
+    for (const [status, label, color] of groups) {
       const rows = this.rows.filter(row => row.status === status);
       if (!rows.length) continue;
-      content.push(this.theme.fg("accent", `${status.replace("-", " ").toUpperCase()} (${rows.length})`));
+      counts.push(`${rows.length} ${label.toLowerCase()}`);
+      if (content.length) { content.push(""); keys.push(`group:${status}:gap`); }
+      content.push(this.theme.fg("dim", label));
       keys.push(`group:${status}`);
       for (const row of rows) {
-        content.push(...rowLines(row, this.current, Date.now()));
-        keys.push(`${row.registrationId}:name`, `${row.registrationId}:detail`);
+        content.push(this.theme.fg(row.registrationId === this.current ? "text" : color,
+          rowLine(row, this.current, Date.now(), inner)));
+        keys.push(row.registrationId);
       }
     }
-    if (!content.length) content.push("No reporting sessions.");
-    const available = Math.max(1, Math.floor(this.height() * 0.9));
-    if (available < 5) return [truncateToWidth("Session Board: enlarge terminal · Esc close", Math.max(1, width))];
-    this.capacity = boardHeight(this.height()) - 4;
+    if (!content.length) content.push(this.error ? "Cannot read session registry; retrying…" : "No reporting sessions.");
+    this.capacity = height - 6;
     if (!this.userScrolled && this.anchor && this.offset > 0) {
       const position = keys.indexOf(this.anchor);
       if (position >= 0) this.offset = position - this.anchorOffset;
@@ -112,13 +135,20 @@ export class Board {
     this.anchor = keys[anchorIndex];
     this.anchorOffset = anchorIndex - this.offset;
     this.userScrolled = false;
+    const body = content.slice(this.offset, this.offset + this.capacity);
+    while (body.length < this.capacity) body.push("");
+    const limited = this.rows.some(row => row.waitingUnavailable);
+    const range = content.length > this.capacity ? ` · ${this.offset + 1}–${Math.min(content.length, this.offset + this.capacity)}/${content.length}` : "";
     const lines = [
-      this.theme.fg("accent", `Session Board · ${this.rows.length} sessions`),
-      this.error ? "Cannot read session registry; retrying…" : "",
-      ...content.slice(this.offset, this.offset + this.capacity),
-      "", this.theme.fg("dim", "↑↓ / PgUp / PgDn scroll · Esc close"),
+      this.theme.fg("text", "Session Board"),
+      this.theme.fg("dim", counts.join(" · ") || "0 sessions"),
+      "", ...body,
+      this.theme.fg("dim", "─".repeat(inner)),
+      this.theme.fg("dim", limited ? "? waiting detection unavailable · › current session" : "› current session · elapsed time in status"),
+      this.theme.fg("dim", `↑↓ / PgUp / PgDn scroll · Esc return${range}`),
     ];
-    return lines.map(line => truncateToWidth(line, Math.max(1, width)));
+    // Fill every cell so the host transcript cannot show through the surface.
+    return lines.map(line => fit(` ${fit(line, inner)}`, width));
   }
 
   invalidate(): void {}

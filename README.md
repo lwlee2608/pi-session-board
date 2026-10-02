@@ -1,6 +1,6 @@
 # Session Board
 
-A read-only native Pi overlay for independent interactive sessions across projects.
+A read-only full-area Pi board for independent interactive sessions across projects.
 Run `/sessions` in any participating terminal. Each terminal must load the extension
 and use the same Pi agent directory. No central launcher or server is needed.
 
@@ -23,8 +23,11 @@ pi -e /absolute/path/to/pi-session-board/src/index.ts
 ```
 
 Start another Pi terminal with the same extension. `/sessions` shows session names,
-project paths, activity, and elapsed time in the current status.
-The current terminal is marked. The board refreshes each second; use arrows or
+short project names, activity, and elapsed time in aligned single-line rows.
+Status counts sit above the grouped list. `›` marks the current terminal; unnamed
+sessions use the last eight characters of their registration ID. Use `/name` in
+each terminal for a recognizable task name. The board covers the conversation
+while open and restores it on exit. The board refreshes each second; use arrows or
 Page Up/Down to scroll and Esc to close. Closing it does not interrupt the agent.
 Groups are Needs input, Failed, Working, Idle, and Unknown. A recovered tool error
 is not a failed run. Idle means the run stopped, not that your task is complete.
@@ -42,7 +45,7 @@ cd "$ROOT/A"
 pi --offline -ne -ns -np -nc -na -e /absolute/path/to/pi-session-board/src/index.ts --name A
 ```
 
-In B use `--name B`. In A open `/sessions`: both paths appear and A is current.
+In B use `--name B`. In A open `/sessions`: both projects appear and A is current.
 In B run `/name renamed-B`: A updates within two seconds. Quit B with Ctrl+D at
 an empty editor: its row disappears. Esc closes A's board; type an unsent marker
 to confirm the editor still works, clear it, then quit. No model calls are needed.
@@ -65,8 +68,8 @@ be recreated. Do not delete your agent directory or session histories.
 Needs input means a native extension question during active work. Idle pickers,
 external-terminal input, and questions written as assistant prose do not count.
 Pi 1.0 reports only the outermost UI interaction. While the board is open, an
-incoming question has no separate event. The row therefore says **Waiting detection
-unavailable (board UI)**, not Needs input. This label persists until the entire
+incoming question has no separate event. The row therefore has a **?** marker, explained once in the footer as
+**waiting detection unavailable**, not Needs input. This marker persists until the entire
 outer interaction ends, including a question that outlives the board. Questions
 still receive keyboard input; answering lets work continue. Abort returns to Idle;
 the Aborted activity label is shown only when Pi reports an aborted outcome.

@@ -83,7 +83,7 @@ export default function (pi: ExtensionAPI): void {
             () => tui.requestRender(), () => tui.terminal.rows, () => done(),
             () => board.focused);
           return board;
-        }, { overlay: true, overlayOptions: { width: "90%", maxHeight: "90%" } });
+        }, { overlay: true, overlayOptions: { width: "100%", maxHeight: "100%", anchor: "top-left", margin: 0 } });
         await interaction;
       } finally { boardOpen = false; startingBoard = false; closeBoard = undefined; }
     },
