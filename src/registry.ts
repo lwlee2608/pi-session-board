@@ -36,7 +36,10 @@ function valid(value: unknown): value is Presence {
   return r.version === 1 && /^[a-f0-9-]{36}$/.test(r.registrationId)
     && [r.sessionId, r.name, r.cwd].every(v => typeof v === "string" && v.length <= 4096)
     && [r.startedAt, r.heartbeatAt, r.statusSince].every(v => Number.isSafeInteger(v) && v >= 0)
-    && (r.status === "idle" || r.status === "working");
+    && ["idle", "working", "needs-input", "failed"].includes(r.status)
+    && (r.tools === undefined || (Array.isArray(r.tools) && r.tools.length <= 8 && r.tools.every(v => typeof v === "string" && v.length <= 128)))
+    && (r.activity === undefined || ["ready", "generating", "compacting", "aborted"].includes(r.activity))
+    && (r.waitingUnavailable === undefined || typeof r.waitingUnavailable === "boolean");
 }
 
 export async function readRows(root: string, now = Date.now()): Promise<Row[]> {
@@ -91,6 +94,8 @@ export class Registration {
       heartbeatAt: this.clock(), sessionId: safeText(metadata.sessionId),
       name: safeText(metadata.name), cwd: safeText(metadata.cwd, 4096),
       status: metadata.status, statusSince: metadata.statusSince,
+      tools: metadata.tools?.slice(0, 8).map(name => safeText(name, 128)),
+      activity: metadata.activity, waitingUnavailable: metadata.waitingUnavailable,
     };
     const task = this.pending.then(async () => {
       if (this.closed) return;

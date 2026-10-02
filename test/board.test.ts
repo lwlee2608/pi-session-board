@@ -14,7 +14,7 @@ const row: Row = {
 };
 
 test("rows show current identity, project, activity and status age", () => {
-  assert.deepEqual(rowLines(row, "current", 121000), ["  Fix auth [current] · 2m", "  /api · Generating"]);
+  assert.deepEqual(rowLines(row, "current", 121000), ["  Fix auth [current] · 2m", "  Generating · /api"]);
   assert.match(rowLines({ ...row, status: "unknown" }, undefined, 22000)[0], /last seen 20s ago/);
 });
 
@@ -39,6 +39,13 @@ test("scrolling reaches the last detail line within the overlay height", async (
     assert.ok(lines.some(line => line.includes("/project-29")));
     assert.match(lines.at(-1)!, /Esc close/);
   } finally { board?.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("limitation indicator precedes long metadata and unfocused board yields the screen", () => {
+  const limited = rowLines({ ...row, cwd: "/very/long/checkout/".repeat(10), tools: ["bash", "read"], waitingUnavailable: true }, undefined, 1000);
+  assert.match(limited[1].slice(0, 72), /Waiting detection unavailable/);
+  const board = new Board("/nonexistent-board-test", undefined, { fg: (_color, text) => text }, () => {}, () => 40, () => {}, () => false);
+  try { assert.deepEqual(board.render(80), []); } finally { board.dispose(); }
 });
 
 test("heartbeats and repeated states do not reset elapsed time", () => {
