@@ -43,7 +43,7 @@
 - Verification uses temporary local registry roots, synthetic events, and disposable Pi sessions. No paid model calls, production credentials, changes to the user's global Pi installation, or disruption of existing sessions. Any crash test targets only a process created for that test.
 
 ## Progress
-Phase 2 of 3 · 8/12 tasks — Phase 1 merged in PR #1; Phase 2 built and verified, review pending.
+Phase 3 of 3 · 8/12 tasks — Phases 1 and 2 verified and reviewed in PRs #1 and #2.
 
 ### Phase 1 — See live sessions across projects
 Open `/sessions` in either of two independently launched Pi terminals and see both sessions update without reopening the board.
@@ -79,7 +79,7 @@ Keep a truthful, usable board through lost heartbeats, session changes, bad regi
 
 - User waived the green-CI requirement for Phases 1 and 2 because CI is explicitly Phase 3 scope. Local proof and review gates still apply; Phase 3 must have green CI.
 - Phase 1: `npm run check` and `npm test` passed (6 tests after the review fix). Two real Pi 1.0.0 terminals under an isolated tmux server, clean HOME/environment and temporary agent directory proved discovery, current marker, rename within two seconds, owned exit cleanup, Esc close and usable editor. No provider credentials or model calls.
-- Phase 2: type-check and 9 tests passed, plus two real isolated Pi terminals with the offline provider/tool fixture. Verified standalone waiting, success, final failure, next-run clearing, board open/close while busy, usable overlapping confirmation with limitation label, abort-to-Idle, and no private markers in records. Pi reports completed for abort during a tool; only explicitly aborted outcomes get the Aborted activity label.
+- Phase 2: two review rounds; fixed tall-board question occlusion by yielding rendering when unfocused and prioritized the unavailable warning before long metadata. Round 2 clean. Type-check and 10 tests passed, plus two real isolated Pi terminals with the offline provider/tool fixture (including 25 filler rows for question visibility). Verified standalone waiting, success, final failure, next-run clearing, board open/close while busy, usable overlapping confirmation with limitation label, abort-to-Idle, and no private markers in records. Pi reports completed for abort during a tool; only explicitly aborted outcomes get the Aborted activity label.
 - Dependency note: `npm audit` reports a High advisory on Pi 1.0.0's development-only `brace-expansion@5.0.9`. `npm audit fix` and `npm update brace-expansion` did not resolve it. No copy ships in this package; host dependency updates are outside this phase.
 
 ## Demo
